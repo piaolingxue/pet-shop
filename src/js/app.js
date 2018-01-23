@@ -1,68 +1,113 @@
 App = {
-  web3Provider: null,
-  contracts: {},
+    web3Provider: null,
+    contracts: {},
 
-  init: function() {
-    // Load pets.
-    $.getJSON('../pets.json', function(data) {
-      var petsRow = $('#petsRow');
-      var petTemplate = $('#petTemplate');
+    init: function() {
+        // Load pets.
+        $.getJSON('../pets.json', function(data) {
+            var petsRow = $('#petsRow');
+            var petTemplate = $('#petTemplate');
 
-      for (i = 0; i < data.length; i ++) {
-        petTemplate.find('.panel-title').text(data[i].name);
-        petTemplate.find('img').attr('src', data[i].picture);
-        petTemplate.find('.pet-breed').text(data[i].breed);
-        petTemplate.find('.pet-age').text(data[i].age);
-        petTemplate.find('.pet-location').text(data[i].location);
-        petTemplate.find('.btn-adopt').attr('data-id', data[i].id);
+            for (i = 0; i < data.length; i++) {
+                petTemplate.find('.panel-title').text(data[i].name);
+                petTemplate.find('img').attr('src', data[i].picture);
+                petTemplate.find('.pet-breed').text(data[i].breed);
+                petTemplate.find('.pet-age').text(data[i].age);
+                petTemplate.find('.pet-location').text(data[i].location);
+                petTemplate.find('.btn-adopt').attr('data-id', data[i].id);
 
-        petsRow.append(petTemplate.html());
-      }
-    });
+                petsRow.append(petTemplate.html());
+            }
+        });
 
-    return App.initWeb3();
-  },
+        return App.initWeb3();
+    },
 
-  initWeb3: function() {
-    /*
-     * Replace me...
-     */
+    initWeb3: function() {
+        /*
+         * Replace me...
+         */
 
-    return App.initContract();
-  },
+        if (typeof web3 !== 'undefined') {
+            App.web3Provider = web3.currentProvider;
+        } else {
+            App.web3Provider = new Web3.providers.HttpProvider('http://localhost:9545');
+        }
+        web3 = new Web3(App.web3Provider);
 
-  initContract: function() {
-    /*
-     * Replace me...
-     */
+        return App.initContract();
+    },
 
-    return App.bindEvents();
-  },
+    initContract: function() {
 
-  bindEvents: function() {
-    $(document).on('click', '.btn-adopt', App.handleAdopt);
-  },
+        $.getJSON('Adoption.json', function(data) {
+            var AdoptionArtifact = data;
+            App.contracts.Adoption = TruffleContract(AdoptionArtifact);
+            App.contracts.Adoption.setProvider(App.web3Provider);
 
-  markAdopted: function(adopters, account) {
-    /*
-     * Replace me...
-     */
-  },
+            App.bindEvents();
+            return App.markAdopted();
+        });
+    },
 
-  handleAdopt: function(event) {
-    event.preventDefault();
+    bindEvents: function() {
+        $(document).on('click', '.btn-adopt', App.handleAdopt);
+    },
 
-    var petId = parseInt($(event.target).data('id'));
+    markAdopted: function(adopters, account) {
+        var adoptionInstance;
+        console.log('mark adopted!');
+        App.contracts.Adoption.deployed().then(function(instance) {
+            adoptionInstance = instance;
+            return adoptionInstance.getAdopters.call();
+        }).then(function(adopters) {
+            for (var i = 0; i < adopters.length; i++) {
+                if (adopters[i] != '0x0000000000000000000000000000000000000000') {
+                    $('.panel-pet').eq(i).find('button').text('Success').attr('disabled', true);
+                }
+                console.log(i, '=>', adopters[i]);
+            }
+        }).catch(function(err) {
+            console.log(err.message);
+        });
+    },
 
-    /*
-     * Replace me...
-     */
-  }
+    handleAdopt: function(event) {
+        event.preventDefault();
+
+        var petId = parseInt($(event.target).data('id'));
+
+        var adoptionInstance;
+
+        web3.eth.getAccounts(function(error, accounts) {
+            if (error) {
+                console.log(error);
+            }
+
+            var account = accounts[0];
+            console.log(account, 'want to buy', petId);
+
+            App.contracts.Adoption.deployed().then(function(instance) {
+                adoptionInstance = instance;
+
+                // Execute adopt as a transaction by sending account
+                return adoptionInstance.adopt(petId, {
+                    from: account
+                });
+            }).then(function(result) {
+                // setTimeout(function() {
+                return App.markAdopted();
+                // }, 5000);
+            }).catch(function(err) {
+                console.log(err.message);
+            });
+        });
+    }
 
 };
 
 $(function() {
-  $(window).load(function() {
-    App.init();
-  });
+    $(window).load(function() {
+        App.init();
+    });
 });
